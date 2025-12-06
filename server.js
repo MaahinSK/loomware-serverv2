@@ -96,6 +96,14 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes);
 
+// Root Route
+app.get('/', (req, res) => {
+  res.status(200).json({
+    message: 'LoomWare Server is Running',
+    status: 'success'
+  });
+});
+
 // Health Check
 app.get('/api/health', (req, res) => {
   res.status(200).json({
