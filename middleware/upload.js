@@ -1,16 +1,7 @@
 const multer = require('multer');
-const CloudinaryStorage = require('multer-storage-cloudinary');
-const cloudinary = require('../config/cloudinary');
 
-// Configure Cloudinary storage
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'loomware/products',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [{ width: 800, height: 800, crop: 'limit' }]
-  }
-});
+// Use memory storage instead of CloudinaryStorage
+const storage = multer.memoryStorage();
 
 // File filter
 const fileFilter = (req, file, cb) => {

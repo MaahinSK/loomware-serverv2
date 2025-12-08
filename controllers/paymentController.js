@@ -7,24 +7,24 @@ const Order = require('../models/Order');
 const createPaymentIntent = async (req, res) => {
   try {
     const { orderId } = req.body;
-    
+
     if (!orderId) {
       return res.status(400).json({
         status: 'error',
         message: 'Order ID is required'
       });
     }
-    
+
     const order = await Order.findById(orderId)
       .populate('product', 'name price');
-    
+
     if (!order) {
       return res.status(404).json({
         status: 'error',
         message: 'Order not found'
       });
     }
-    
+
     // Check if user owns the order
     if (order.user.toString() !== req.user.id) {
       return res.status(403).json({
@@ -32,7 +32,7 @@ const createPaymentIntent = async (req, res) => {
         message: 'Not authorized to pay for this order'
       });
     }
-    
+
     // Check if order is pending
     if (order.orderStatus !== 'pending') {
       return res.status(400).json({
@@ -40,7 +40,7 @@ const createPaymentIntent = async (req, res) => {
         message: 'Order is not in pending status'
       });
     }
-    
+
     // Create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(order.totalPrice * 100), // Convert to cents
@@ -50,11 +50,11 @@ const createPaymentIntent = async (req, res) => {
         userId: req.user.id
       }
     });
-    
+
     // Update order with payment intent ID
     order.paymentId = paymentIntent.id;
     await order.save();
-    
+
     res.status(200).json({
       status: 'success',
       data: {
@@ -77,38 +77,38 @@ const createPaymentIntent = async (req, res) => {
 const confirmPayment = async (req, res) => {
   try {
     const { paymentIntentId } = req.body;
-    
+
     if (!paymentIntentId) {
       return res.status(400).json({
         status: 'error',
         message: 'Payment intent ID is required'
       });
     }
-    
+
     // Retrieve payment intent from Stripe
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    
+
     if (paymentIntent.status !== 'succeeded') {
       return res.status(400).json({
         status: 'error',
         message: 'Payment not successful'
       });
     }
-    
+
     // Find order by payment intent ID
     const order = await Order.findOne({ paymentId: paymentIntentId });
-    
+
     if (!order) {
       return res.status(404).json({
         status: 'error',
         message: 'Order not found'
       });
     }
-    
+
     // Update order payment status
     order.paymentStatus = 'paid';
     await order.save();
-    
+
     res.status(200).json({
       status: 'success',
       data: {
@@ -131,7 +131,7 @@ const handleWebhook = async (req, res) => {
   try {
     const sig = req.headers['stripe-signature'];
     let event;
-    
+
     try {
       event = stripe.webhooks.constructEvent(
         req.body,
@@ -142,12 +142,55 @@ const handleWebhook = async (req, res) => {
       console.error('Webhook signature verification failed:', err.message);
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
-    
+
     // Handle the event
     switch (event.type) {
+      case 'checkout.session.completed':
+        const session = event.data.object;
+        console.log('Checkout session completed:', session.id);
+
+        // Create order from session metadata
+        try {
+          const Product = require('../models/Product');
+          const product = await Product.findById(session.metadata.productId);
+
+          if (!product) {
+            console.error('Product not found:', session.metadata.productId);
+            break;
+          }
+
+          // Create order
+          const newOrder = await Order.create({
+            user: session.metadata.userId,
+            product: session.metadata.productId,
+            quantity: parseInt(session.metadata.quantity),
+            unitPrice: product.price,
+            totalPrice: product.price * parseInt(session.metadata.quantity),
+            firstName: session.metadata.firstName,
+            lastName: session.metadata.lastName,
+            email: session.customer_email || session.customer_details?.email,
+            contactNumber: session.metadata.contactNumber,
+            deliveryAddress: session.metadata.deliveryAddress,
+            additionalNotes: session.metadata.additionalNotes || '',
+            paymentMethod: 'Stripe',
+            paymentStatus: 'paid',
+            paymentId: session.payment_intent,
+            orderStatus: 'pending'
+          });
+
+          // Update product quantity
+          product.availableQuantity -= parseInt(session.metadata.quantity);
+          await product.save();
+
+          console.log(`Order ${newOrder._id} created from Stripe payment`);
+        } catch (orderError) {
+          console.error('Error creating order from webhook:', orderError);
+        }
+        break;
+
       case 'payment_intent.succeeded':
         const paymentIntent = event.data.object;
-        
+
         // Find and update order
         const order = await Order.findOne({ paymentId: paymentIntent.id });
         if (order) {
@@ -156,10 +199,10 @@ const handleWebhook = async (req, res) => {
           console.log(`Order ${order._id} payment confirmed via webhook`);
         }
         break;
-        
+
       case 'payment_intent.payment_failed':
         const failedPaymentIntent = event.data.object;
-        
+
         // Find and update order
         const failedOrder = await Order.findOne({ paymentId: failedPaymentIntent.id });
         if (failedOrder) {
@@ -168,11 +211,11 @@ const handleWebhook = async (req, res) => {
           console.log(`Order ${failedOrder._id} payment failed via webhook`);
         }
         break;
-        
+
       default:
         console.log(`Unhandled event type ${event.type}`);
     }
-    
+
     res.status(200).json({ received: true });
   } catch (error) {
     console.error('Webhook error:', error);
@@ -183,8 +226,90 @@ const handleWebhook = async (req, res) => {
   }
 };
 
+// @desc    Create Stripe checkout session
+// @route   POST /api/payments/create-checkout-session
+// @access  Private
+const createCheckoutSession = async (req, res) => {
+  try {
+    const { orderData } = req.body;
+
+    if (!orderData || !orderData.productId || !orderData.quantity) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Order data is required'
+      });
+    }
+
+    // Get product details
+    const Product = require('../models/Product');
+    const product = await Product.findById(orderData.productId);
+
+    if (!product) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Product not found'
+      });
+    }
+
+    const totalAmount = product.price * orderData.quantity;
+
+    let clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    if (clientUrl.includes('your-client-domain')) {
+      clientUrl = 'http://localhost:3000';
+    }
+    console.log('Using CLIENT_URL:', clientUrl);
+
+    // Create checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: product.name,
+              description: product.description,
+              images: product.images && product.images.length > 0 ? [product.images[0]] : [],
+            },
+            unit_amount: Math.round(product.price * 100), // Convert to cents
+          },
+          quantity: orderData.quantity,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${clientUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${clientUrl}/checkout`,
+      metadata: {
+        userId: req.user.id,
+        productId: orderData.productId,
+        quantity: orderData.quantity,
+        firstName: orderData.firstName,
+        lastName: orderData.lastName,
+        contactNumber: orderData.contactNumber,
+        deliveryAddress: orderData.deliveryAddress,
+        additionalNotes: orderData.additionalNotes || '',
+      },
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        sessionId: session.id,
+        url: session.url
+      }
+    });
+  } catch (error) {
+    console.error('Create checkout session error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error'
+    });
+  }
+};
+
 module.exports = {
   createPaymentIntent,
   confirmPayment,
-  handleWebhook
+  handleWebhook,
+  createCheckoutSession
 };

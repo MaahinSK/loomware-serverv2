@@ -15,7 +15,7 @@ const ProductSchema = new mongoose.Schema({
   category: {
     type: String,
     required: [true, 'Please select a category'],
-    enum: ['Shirt', 'Pant', 'Jacket', 'Suits', 'Accessories', 'Other']
+    enum: ['Shirt', 'Pant', 'Jacket', 'Suits', 'Accessories', 'Dress', 'Skirt', 'T-Shirt', 'Other']
   },
   price: {
     type: Number,
@@ -61,7 +61,7 @@ const ProductSchema = new mongoose.Schema({
 });
 
 // Update timestamp on save
-ProductSchema.pre('save', function(next) {
+ProductSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
 });

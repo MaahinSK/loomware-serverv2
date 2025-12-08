@@ -12,7 +12,7 @@ const {
   cancelOrder,
   updateOrderStatus
 } = require('../controllers/orderController');
-const { protect, buyerOnly, managerOnly, adminOnly } = require('../middleware/auth');
+const { protect, buyerOnly, managerOnly, adminOnly, authorize } = require('../middleware/auth');
 
 // All routes require authentication
 router.use(protect);
@@ -23,6 +23,10 @@ router.route('/my-orders')
 
 router.route('/')
   .post(buyerOnly, createOrder);
+
+// Admin route - must come before other specific routes
+router.route('/admin')
+  .get(adminOnly, getAllOrders);
 
 router.route('/:id/cancel')
   .put(buyerOnly, cancelOrder);
@@ -45,7 +49,7 @@ router.route('/')
   .get(adminOnly, getAllOrders);
 
 router.route('/:id/status')
-  .put(adminOnly, updateOrderStatus);
+  .put(authorize('admin', 'manager'), updateOrderStatus);
 
 // Common routes
 router.route('/:id')

@@ -4,6 +4,7 @@ const router = express.Router();
 const {
   register,
   login,
+  googleLogin,
   logout,
   getMe,
   updateProfile
@@ -29,6 +30,7 @@ const loginValidation = [
 // Routes
 router.post('/register', registerValidation, register);
 router.post('/login', loginValidation, login);
+router.post('/google', googleLogin);
 router.post('/logout', logout);
 router.get('/me', protect, getMe);
 router.put('/update-profile', protect, updateProfile);

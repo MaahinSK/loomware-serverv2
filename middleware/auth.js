@@ -25,10 +25,10 @@ const protect = async (req, res, next) => {
 
     // Verify JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     // Get user from database
     const user = await User.findById(decoded.id).select('-password');
-    
+
     if (!user) {
       return res.status(401).json({
         status: 'error',
@@ -56,21 +56,21 @@ const protect = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Auth middleware error:', error.message);
-    
+
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({
         status: 'error',
         message: 'Invalid token'
       });
     }
-    
+
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({
         status: 'error',
         message: 'Token expired'
       });
     }
-    
+
     return res.status(401).json({
       status: 'error',
       message: 'Not authorized'
@@ -97,10 +97,10 @@ const firebaseAuth = async (req, res, next) => {
 
     // Verify Firebase token
     const decodedToken = await verifyFirebaseToken(idToken);
-    
+
     // Find or create user in database
     let user = await User.findOne({ email: decodedToken.email });
-    
+
     if (!user) {
       // Create new user from Firebase
       user = await User.create({
@@ -152,12 +152,12 @@ const optionalAuth = async (req, res, next) => {
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const user = await User.findById(decoded.id).select('-password');
-      
+
       if (user && user.status === 'approved') {
         req.user = user;
       }
     }
-    
+
     next();
   } catch (error) {
     // Don't throw error for optional auth
@@ -170,7 +170,7 @@ const adminOnly = (req, res, next) => {
   if (req.user && req.user.role === 'admin') {
     return next();
   }
-  
+
   return res.status(403).json({
     status: 'error',
     message: 'Admin access required'
@@ -182,7 +182,7 @@ const managerOnly = (req, res, next) => {
   if (req.user && req.user.role === 'manager') {
     return next();
   }
-  
+
   return res.status(403).json({
     status: 'error',
     message: 'Manager access required'
@@ -194,7 +194,7 @@ const buyerOnly = (req, res, next) => {
   if (req.user && req.user.role === 'buyer') {
     return next();
   }
-  
+
   return res.status(403).json({
     status: 'error',
     message: 'Buyer access required'
@@ -221,6 +221,27 @@ const canAccessDashboard = (req, res, next) => {
   next();
 };
 
+// Authorize based on roles
+const authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Not authorized, no user found'
+      });
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        status: 'error',
+        message: `User role ${req.user.role} is not authorized to access this route`
+      });
+    }
+
+    next();
+  };
+};
+
 module.exports = {
   protect,
   firebaseAuth,
@@ -228,5 +249,6 @@ module.exports = {
   adminOnly,
   managerOnly,
   buyerOnly,
+  authorize,
   canAccessDashboard
 };

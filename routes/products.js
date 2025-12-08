@@ -7,7 +7,9 @@ const {
   createProduct,
   updateProduct,
   deleteProduct,
-  getManagerProducts
+  getManagerProducts,
+  toggleProductVisibility,
+  toggleProductFeature
 } = require('../controllers/productController');
 const { protect, managerOnly, adminOnly } = require('../middleware/auth');
 const { uploadMultiple } = require('../middleware/upload');
@@ -19,6 +21,10 @@ router.route('/')
 router.route('/featured')
   .get(getFeaturedProducts);
 
+// Admin route - must come before /:id
+router.route('/admin')
+  .get(protect, adminOnly, getAllProducts);
+
 router.route('/:id')
   .get(getProductById);
 
@@ -28,6 +34,12 @@ router.use(protect);
 // Manager routes
 router.route('/manager/my-products')
   .get(managerOnly, getManagerProducts);
+
+router.route('/:id/visibility')
+  .put(toggleProductVisibility);
+
+router.route('/:id/feature')
+  .put(toggleProductFeature);
 
 router.route('/')
   .post(managerOnly, uploadMultiple, createProduct);

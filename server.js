@@ -15,6 +15,8 @@ const userRoutes = require('./routes/users');
 const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
 const paymentRoutes = require('./routes/payments');
+const trackingRoutes = require('./routes/tracking');
+const dashboardRoutes = require('./routes/dashboard');
 
 // Initialize Express
 const app = express();
@@ -35,6 +37,29 @@ if (process.env.NODE_ENV !== 'production') {
   }));
 }
 
+// CORS Configuration
+app.use(cors({
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      process.env.CLIENT_URL
+    ].filter(Boolean);
+
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) === -1) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept']
+}));
+
 // Security Middleware
 app.use(helmet());
 app.use(mongoSanitize());
@@ -47,27 +72,6 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use('/api/', limiter);
-
-// CORS Configuration
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
-  'http://localhost:3000',
-  'https://your-client-domain.com'
-];
-
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  credentials: true,
-  optionsSuccessStatus: 200
-}));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -95,6 +99,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/tracking', trackingRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Root Route
 app.get('/', (req, res) => {

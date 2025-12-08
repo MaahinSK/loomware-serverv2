@@ -64,7 +64,7 @@ const OrderSchema = new mongoose.Schema({
   },
   orderStatus: {
     type: String,
-    enum: ['pending', 'approved', 'rejected', 'in_production', 'completed', 'cancelled'],
+    enum: ['pending', 'approved', 'rejected', 'in_production', 'processing', 'shipped', 'completed', 'cancelled'],
     default: 'pending'
   },
   approvedAt: {
@@ -90,7 +90,7 @@ const OrderSchema = new mongoose.Schema({
 });
 
 // Calculate total price before saving
-OrderSchema.pre('save', function(next) {
+OrderSchema.pre('save', function (next) {
   this.totalPrice = this.unitPrice * this.quantity;
   this.updatedAt = Date.now();
   next();

@@ -14,7 +14,7 @@ const createOrder = async (req, res) => {
         message: 'Only buyers can place orders'
       });
     }
-    
+
     const {
       productId,
       quantity,
@@ -25,7 +25,7 @@ const createOrder = async (req, res) => {
       additionalNotes,
       paymentMethod
     } = req.body;
-    
+
     // Validate required fields
     if (!productId || !quantity || !firstName || !lastName || !contactNumber || !deliveryAddress || !paymentMethod) {
       return res.status(400).json({
@@ -33,7 +33,7 @@ const createOrder = async (req, res) => {
         message: 'Please fill all required fields'
       });
     }
-    
+
     // Get product
     const product = await Product.findById(productId);
     if (!product) {
@@ -42,7 +42,7 @@ const createOrder = async (req, res) => {
         message: 'Product not found'
       });
     }
-    
+
     // Validate quantity
     if (quantity < product.minimumOrderQuantity) {
       return res.status(400).json({
@@ -50,14 +50,14 @@ const createOrder = async (req, res) => {
         message: `Minimum order quantity is ${product.minimumOrderQuantity}`
       });
     }
-    
+
     if (quantity > product.availableQuantity) {
       return res.status(400).json({
         status: 'error',
         message: `Only ${product.availableQuantity} items available`
       });
     }
-    
+
     // Validate payment method
     if (!product.paymentOptions.includes(paymentMethod)) {
       return res.status(400).json({
@@ -65,33 +65,41 @@ const createOrder = async (req, res) => {
         message: `This product only supports: ${product.paymentOptions.join(', ')}`
       });
     }
-    
+
     // Create order
+    const totalPrice = product.price * parseInt(quantity);
+
+    // Format delivery address as string
+    const formattedAddress = typeof deliveryAddress === 'object'
+      ? `${deliveryAddress.street}, ${deliveryAddress.city}, ${deliveryAddress.state} ${deliveryAddress.zipCode}, ${deliveryAddress.country}`
+      : deliveryAddress;
+
     const order = await Order.create({
       user: req.user.id,
       product: productId,
       quantity: parseInt(quantity),
       unitPrice: product.price,
+      totalPrice,
       firstName,
       lastName,
       email: req.user.email,
       contactNumber,
-      deliveryAddress,
+      deliveryAddress: formattedAddress,
       additionalNotes: additionalNotes || '',
       paymentMethod,
       paymentStatus: paymentMethod === 'Cash on Delivery' ? 'pending' : 'pending',
       orderStatus: 'pending'
     });
-    
+
     // Update product quantity
     product.availableQuantity -= quantity;
     await product.save();
-    
+
     // Populate order data
     const populatedOrder = await Order.findById(order._id)
       .populate('product', 'name images price')
       .populate('user', 'name email');
-    
+
     res.status(201).json({
       status: 'success',
       data: {
@@ -115,7 +123,7 @@ const getMyOrders = async (req, res) => {
     const orders = await Order.find({ user: req.user.id })
       .populate('product', 'name images price')
       .sort({ createdAt: -1 });
-    
+
     res.status(200).json({
       status: 'success',
       data: {
@@ -139,26 +147,26 @@ const getOrderById = async (req, res) => {
     const order = await Order.findById(req.params.id)
       .populate('product')
       .populate('user', 'name email contactNumber');
-    
+
     if (!order) {
       return res.status(404).json({
         status: 'error',
         message: 'Order not found'
       });
     }
-    
+
     // Check authorization
     const isOwner = order.user._id.toString() === req.user.id;
     const isManager = req.user.role === 'manager';
     const isAdmin = req.user.role === 'admin';
-    
+
     if (!isOwner && !isManager && !isAdmin) {
       return res.status(403).json({
         status: 'error',
         message: 'Not authorized to view this order'
       });
     }
-    
+
     res.status(200).json({
       status: 'success',
       data: {
@@ -182,31 +190,31 @@ const getAllOrders = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-    
+
     const { status, startDate, endDate } = req.query;
-    
+
     let query = {};
-    
+
     // Filter by status
     if (status) {
       query.orderStatus = status;
     }
-    
+
     // Filter by date range
     if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) query.createdAt.$gte = new Date(startDate);
       if (endDate) query.createdAt.$lte = new Date(endDate);
     }
-    
+
     const totalOrders = await Order.countDocuments(query);
     const orders = await Order.find(query)
       .populate('user', 'name email')
-      .populate('product', 'name')
+      .populate('product', 'name images')
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 });
-    
+
     res.status(200).json({
       status: 'success',
       data: {
@@ -236,7 +244,7 @@ const getPendingOrders = async (req, res) => {
       .populate('user', 'name email')
       .populate('product', 'name images price')
       .sort({ createdAt: 1 });
-    
+
     res.status(200).json({
       status: 'success',
       data: {
@@ -257,11 +265,15 @@ const getPendingOrders = async (req, res) => {
 // @access  Private/Manager
 const getApprovedOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ orderStatus: 'approved' })
+    const orders = await Order.find({
+      orderStatus: {
+        $in: ['approved', 'processing', 'shipped', 'in_production', 'completed']
+      }
+    })
       .populate('user', 'name email')
       .populate('product', 'name images')
       .sort({ approvedAt: -1 });
-    
+
     res.status(200).json({
       status: 'success',
       data: {
@@ -283,25 +295,25 @@ const getApprovedOrders = async (req, res) => {
 const approveOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
-    
+
     if (!order) {
       return res.status(404).json({
         status: 'error',
         message: 'Order not found'
       });
     }
-    
+
     if (order.orderStatus !== 'pending') {
       return res.status(400).json({
         status: 'error',
         message: 'Only pending orders can be approved'
       });
     }
-    
+
     order.orderStatus = 'approved';
     order.approvedAt = new Date();
     await order.save();
-    
+
     res.status(200).json({
       status: 'success',
       data: {
@@ -323,32 +335,32 @@ const approveOrder = async (req, res) => {
 const rejectOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
-    
+
     if (!order) {
       return res.status(404).json({
         status: 'error',
         message: 'Order not found'
       });
     }
-    
+
     if (order.orderStatus !== 'pending') {
       return res.status(400).json({
         status: 'error',
         message: 'Only pending orders can be rejected'
       });
     }
-    
+
     // Restore product quantity
     const product = await Product.findById(order.product);
     if (product) {
       product.availableQuantity += order.quantity;
       await product.save();
     }
-    
+
     order.orderStatus = 'rejected';
     order.rejectedAt = new Date();
     await order.save();
-    
+
     res.status(200).json({
       status: 'success',
       data: {
@@ -370,14 +382,14 @@ const rejectOrder = async (req, res) => {
 const cancelOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
-    
+
     if (!order) {
       return res.status(404).json({
         status: 'error',
         message: 'Order not found'
       });
     }
-    
+
     // Check if user owns the order
     if (order.user.toString() !== req.user.id) {
       return res.status(403).json({
@@ -385,7 +397,7 @@ const cancelOrder = async (req, res) => {
         message: 'Not authorized to cancel this order'
       });
     }
-    
+
     // Check if order can be cancelled
     if (order.orderStatus !== 'pending') {
       return res.status(400).json({
@@ -393,18 +405,18 @@ const cancelOrder = async (req, res) => {
         message: 'Only pending orders can be cancelled'
       });
     }
-    
+
     // Restore product quantity
     const product = await Product.findById(order.product);
     if (product) {
       product.availableQuantity += order.quantity;
       await product.save();
     }
-    
+
     order.orderStatus = 'cancelled';
     order.cancelledAt = new Date();
     await order.save();
-    
+
     res.status(200).json({
       status: 'success',
       data: {
@@ -426,25 +438,25 @@ const cancelOrder = async (req, res) => {
 const updateOrderStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    
+
     if (!status) {
       return res.status(400).json({
         status: 'error',
         message: 'Status is required'
       });
     }
-    
+
     const order = await Order.findById(req.params.id);
-    
+
     if (!order) {
       return res.status(404).json({
         status: 'error',
         message: 'Order not found'
       });
     }
-    
+
     order.orderStatus = status;
-    
+
     if (status === 'approved') {
       order.approvedAt = new Date();
     } else if (status === 'rejected') {
@@ -458,9 +470,9 @@ const updateOrderStatus = async (req, res) => {
     } else if (status === 'completed') {
       order.completedAt = new Date();
     }
-    
+
     await order.save();
-    
+
     res.status(200).json({
       status: 'success',
       data: {
