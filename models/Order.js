@@ -64,7 +64,7 @@ const OrderSchema = new mongoose.Schema({
   },
   orderStatus: {
     type: String,
-    enum: ['pending', 'approved', 'rejected', 'in_production', 'processing', 'shipped', 'completed', 'cancelled'],
+    enum: ['pending', 'approved', 'cutting_completed', 'sewing_started', 'finishing', 'qc_checked', 'packed', 'shipped', 'out_for_delivery', 'delivered', 'completed', 'cancelled'],
     default: 'pending'
   },
   approvedAt: {
