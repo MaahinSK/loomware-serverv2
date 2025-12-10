@@ -9,7 +9,8 @@ const {
   deleteProduct,
   getManagerProducts,
   toggleProductVisibility,
-  toggleProductFeature
+  toggleProductFeature,
+  getRelatedProducts
 } = require('../controllers/productController');
 const { protect, managerOnly, adminOnly } = require('../middleware/auth');
 const { uploadMultiple } = require('../middleware/upload');
@@ -40,6 +41,8 @@ router.route('/:id/visibility')
 
 router.route('/:id/feature')
   .put(toggleProductFeature);
+
+router.get('/related/:id', getRelatedProducts);
 
 router.route('/')
   .post(managerOnly, uploadMultiple, createProduct);

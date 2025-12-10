@@ -253,10 +253,7 @@ const createCheckoutSession = async (req, res) => {
 
     const totalAmount = product.price * orderData.quantity;
 
-    let clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
-    if (clientUrl.includes('your-client-domain')) {
-      clientUrl = 'http://localhost:3000';
-    }
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
     console.log('Using CLIENT_URL:', clientUrl);
 
     // Create checkout session
@@ -302,7 +299,7 @@ const createCheckoutSession = async (req, res) => {
     console.error('Create checkout session error:', error);
     res.status(500).json({
       status: 'error',
-      message: 'Server error'
+      message: error.message
     });
   }
 };

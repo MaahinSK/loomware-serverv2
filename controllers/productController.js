@@ -470,7 +470,42 @@ const toggleProductFeature = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Toggle feature error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Get related products
+// @route   GET /api/products/related/:id
+// @access  Public
+const getRelatedProducts = async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Product not found'
+      });
+    }
+
+    const relatedProducts = await Product.find({
+      category: product.category,
+      _id: { $ne: product._id }
+    })
+      .limit(4)
+      .populate('createdBy', 'name email');
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        products: relatedProducts
+      }
+    });
+  } catch (error) {
+    console.error('Get related products error:', error);
     res.status(500).json({
       status: 'error',
       message: 'Server error'
@@ -487,5 +522,6 @@ module.exports = {
   deleteProduct,
   getManagerProducts,
   toggleProductVisibility,
-  toggleProductFeature
+  toggleProductFeature,
+  getRelatedProducts
 };
