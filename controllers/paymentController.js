@@ -147,20 +147,26 @@ const handleWebhook = async (req, res) => {
     switch (event.type) {
       case 'checkout.session.completed':
         const session = event.data.object;
-        console.log('Checkout session completed:', session.id);
+        console.log('=== STRIPE WEBHOOK: Checkout Session Completed ===');
+        console.log('Session ID:', session.id);
+        console.log('Payment Intent:', session.payment_intent);
+        console.log('Session Metadata:', JSON.stringify(session.metadata, null, 2));
 
         // Create order from session metadata
         try {
           const Product = require('../models/Product');
+          console.log('Looking for product ID:', session.metadata.productId);
           const product = await Product.findById(session.metadata.productId);
 
           if (!product) {
-            console.error('Product not found:', session.metadata.productId);
+            console.error('❌ ERROR: Product not found:', session.metadata.productId);
             break;
           }
 
+          console.log('✓ Product found:', product.name);
+
           // Create order
-          const newOrder = await Order.create({
+          const orderData = {
             user: session.metadata.userId,
             product: session.metadata.productId,
             quantity: parseInt(session.metadata.quantity),
@@ -176,15 +182,23 @@ const handleWebhook = async (req, res) => {
             paymentStatus: 'paid',
             paymentId: session.payment_intent,
             orderStatus: 'pending'
-          });
+          };
+
+          console.log('Creating order with data:', JSON.stringify(orderData, null, 2));
+          const newOrder = await Order.create(orderData);
 
           // Update product quantity
           product.availableQuantity -= parseInt(session.metadata.quantity);
           await product.save();
 
-          console.log(`Order ${newOrder._id} created from Stripe payment`);
+          console.log('✓ SUCCESS: Order created with ID:', newOrder._id);
+          console.log('✓ Payment Method set to:', newOrder.paymentMethod);
+          console.log('✓ Payment Status:', newOrder.paymentStatus);
+          console.log('=== END WEBHOOK PROCESSING ===');
         } catch (orderError) {
-          console.error('Error creating order from webhook:', orderError);
+          console.error('❌ ERROR creating order from webhook:', orderError);
+          console.error('Error details:', orderError.message);
+          console.error('Stack trace:', orderError.stack);
         }
         break;
 
