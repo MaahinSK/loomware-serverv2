@@ -73,7 +73,11 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Body parsing middleware
+// IMPORTANT: Stripe webhook route MUST come before body parsing middleware
+// Stripe needs raw body for signature verification
+app.use('/api/payments', require('./routes/payments'));
+
+// Body parsing middleware (comes AFTER webhook route)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
@@ -98,7 +102,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
-app.use('/api/payments', paymentRoutes);
+// Payment routes already registered above (before body parser)
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
