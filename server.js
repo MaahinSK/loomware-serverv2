@@ -75,7 +75,8 @@ app.use('/api/', limiter);
 
 // IMPORTANT: Stripe webhook route MUST come before body parsing middleware
 // Stripe needs raw body for signature verification
-app.use('/api/payments', require('./routes/payments'));
+const { handleWebhook } = require('./controllers/paymentController');
+app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), handleWebhook);
 
 // Body parsing middleware (comes AFTER webhook route)
 app.use(express.json({ limit: '10mb' }));
@@ -102,7 +103,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
-// Payment routes already registered above (before body parser)
+app.use('/api/payments', paymentRoutes); // Now registered AFTER body parser
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 

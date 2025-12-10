@@ -3,15 +3,13 @@ const router = express.Router();
 const {
   createPaymentIntent,
   confirmPayment,
-  handleWebhook,
   createCheckoutSession
 } = require('../controllers/paymentController');
 const { protect, buyerOnly } = require('../middleware/auth');
 
-// Webhook route (no auth required)
-router.post('/webhook', express.raw({ type: 'application/json' }), handleWebhook);
+// Webhook route is registered separately in server.js (before body parser)
 
-// Protected routes
+// Protected routes (these need JSON body parsing)
 router.use(protect);
 
 router.post('/create-payment-intent', buyerOnly, createPaymentIntent);
