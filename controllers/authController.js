@@ -238,7 +238,11 @@ const logout = (req, res) => {
 // @access  Private
 const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id).select('-password');
+
+    console.log('[AUTH /me] User ID:', user._id);
+    console.log('[AUTH /me] User status:', user.status);
+    console.log('[AUTH /me] Suspend reason:', user.suspendReason);
 
     res.status(200).json({
       status: 'success',
