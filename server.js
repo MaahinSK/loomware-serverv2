@@ -17,6 +17,7 @@ const orderRoutes = require('./routes/orders');
 const paymentRoutes = require('./routes/payments');
 const trackingRoutes = require('./routes/tracking');
 const dashboardRoutes = require('./routes/dashboard');
+const statsRoutes = require('./routes/stats');
 
 // Initialize Express
 const app = express();
@@ -106,6 +107,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes); // Now registered AFTER body parser
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/stats', statsRoutes);
 
 // Root Route
 app.get('/', (req, res) => {
